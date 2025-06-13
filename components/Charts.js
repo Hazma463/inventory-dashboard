@@ -66,7 +66,10 @@ export default function Charts({ warehouses }) {
 
   // Calculate total products
   const totalProducts = filteredWarehouses.reduce((total, warehouse) => {
-    return total + warehouse.inventory.reduce((sum, item) => sum + Number(item.totalQuantity), 0);
+    return total + warehouse.inventory.reduce((sum, item) => {
+      const qty = Number(item.totalQuantity);
+      return sum + (isNaN(qty) ? 0 : qty);
+    }, 0);
   }, 0);
 
   // Most delivered product

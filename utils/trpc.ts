@@ -1,5 +1,5 @@
 import { createTRPCNext } from '@trpc/next';
-import { httpBatchLink } from '@trpc/client';
+import { httpLink } from '@trpc/client';
 import type { AppRouter } from '../server/routers/_app';
 import superjson from 'superjson';
 
@@ -8,7 +8,7 @@ export const trpc = createTRPCNext<AppRouter>({
     return {
       transformer: superjson,
       links: [
-        httpBatchLink({
+        httpLink({
           url: `${process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000'}/api/trpc`,
           headers() {
             return {
@@ -33,4 +33,5 @@ export const trpc = createTRPCNext<AppRouter>({
     };
   },
   ssr: false,
+  abortOnUnmount: true,
 }); 

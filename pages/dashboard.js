@@ -5,8 +5,13 @@ import Head from 'next/head';
 import dynamic from 'next/dynamic';
 import { trpc } from '../utils/trpc';
 
-// Import Layout directly since it's a core component
-import Layout from '../components/layout/Layout';
+// Dynamic import for Layout to prevent hydration issues
+const Layout = dynamic(() => import('../components/layout/Layout'), {
+  loading: () => <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+    <div className="text-white">Loading...</div>
+  </div>,
+  ssr: false
+});
 import WarehouseForm from '../components/WarehouseForm';
 
 // Dynamic imports for other components
@@ -30,7 +35,7 @@ export default function Dashboard() {
   const [editingWarehouse, setEditingWarehouse] = useState(null);
 
   // Fetch warehouses from backend
-  const { data: warehouses = [], isLoading, error: queryError } = trpc.inventory.getWarehouses.useQuery(undefined, {
+  const { data: warehousesData, isLoading, error: queryError } = trpc.inventory.getWarehouses.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
     staleTime: 0,
@@ -44,6 +49,12 @@ export default function Dashboard() {
       });
     },
   });
+
+  // Ensure warehouses is always an array
+  const warehouses = Array.isArray(warehousesData) ? warehousesData : [];
+  
+  // Log for debugging
+  console.log('🔵 Warehouses data:', { warehousesData, warehouses, isLoading, queryError });
 
   const utils = trpc.useContext();
 
@@ -140,21 +151,70 @@ export default function Dashboard() {
     }
   });
 
+  // Test function to bypass tRPC
+  const testDirectAPI = async (data) => {
+    console.log('🔵 Testing direct API call with data:', data);
+    try {
+      const response = await fetch('/api/test-warehouse', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      
+      const result = await response.json();
+      console.log('🟢 Direct API response:', result);
+      alert(`Direct API test successful: ${JSON.stringify(result)}`);
+    } catch (error) {
+      console.error('🔴 Direct API test failed:', error);
+      alert(`Direct API test failed: ${error.message}`);
+    }
+  };
+
   // Handlers for warehouse
   const handleAddWarehouse = async (data) => {
+    console.log('🔵 handleAddWarehouse function called');
+    console.log('🔵 Function arguments:', arguments);
+    console.log('🔵 Data parameter:', data);
+    
     try {
-      console.log('🔵 Adding warehouse with data:', data);
-      if (!data || !data.name || !data.location) {
+      console.log('🔵 handleAddWarehouse called');
+      console.log('🔵 Raw data received:', data);
+      console.log('🔵 Data type:', typeof data);
+      console.log('🔵 Data stringified:', JSON.stringify(data));
+      console.log('🔵 Data properties:', Object.keys(data || {}));
+      console.log('🔵 Data is object:', typeof data === 'object' && data !== null);
+      console.log('🔵 Data instanceof Object:', data instanceof Object);
+      
+      if (!data) {
+        console.error('🔴 Data is null or undefined');
+        throw new Error('Data is required');
+      }
+      
+      if (typeof data !== 'object') {
+        console.error('🔴 Data is not an object, type:', typeof data);
+        throw new Error('Data must be an object');
+      }
+      
+      if (!data.name || !data.location) {
+        console.error('🔴 Missing required fields:', { name: data.name, location: data.location });
         throw new Error('Name and location are required');
       }
       
       // Ensure we're sending a properly structured object
       const input = {
-        name: data.name.trim(),
-        location: data.location.trim()
+        name: String(data.name).trim(),
+        location: String(data.location).trim()
       };
       
-      console.log('🔵 Sending mutation with input:', input);
+      console.log('🔵 Prepared input for mutation:', input);
+      console.log('🔵 Input type:', typeof input);
+      console.log('🔵 Input stringified:', JSON.stringify(input));
+      console.log('🔵 Input validation - name:', input.name, 'location:', input.location);
+      console.log('🔵 createWarehouse mutation function:', typeof createWarehouse.mutateAsync);
+      console.log('🔵 Calling createWarehouse.mutateAsync...');
+      
       const result = await createWarehouse.mutateAsync(input);
       console.log('🟢 Warehouse added successfully:', result);
     } catch (error) {
@@ -164,7 +224,9 @@ export default function Dashboard() {
         code: error.code,
         stack: error.stack,
         input: data,
+        errorType: typeof error,
       });
+      alert(`Error creating warehouse: ${error.message}`);
     }
   };
 
@@ -205,10 +267,53 @@ export default function Dashboard() {
   const handleAddInventory = async (warehouseId, data) => {
     try {
       console.log('🔵 Adding inventory with data:', { warehouseId, ...data });
-      const result = await createInventory.mutateAsync({
-        warehouseId,
-        ...data
-      });
+      console.log('🔵 Data type check:', typeof data, 'warehouseId type:', typeof warehouseId);
+      
+      // Validate input data
+      if (!data) {
+        throw new Error('Inventory data is required');
+      }
+      
+      if (!warehouseId) {
+        throw new Error('Warehouse ID is required');
+      }
+      
+      // Ensure we have a proper object, not a string
+      let parsedData = data;
+      if (typeof data === 'string') {
+        try {
+          parsedData = JSON.parse(data);
+        } catch (e) {
+          throw new Error('Invalid data format');
+        }
+      }
+      
+      // Ensure all required fields are present and properly typed
+      const inventoryData = {
+        warehouseId: Number(warehouseId),
+        orderNo: String(parsedData.orderNo || ''),
+        orderDate: String(parsedData.orderDate || ''),
+        customerName: String(parsedData.customerName || ''),
+        correspondenceAddress: String(parsedData.correspondenceAddress || ''),
+        city: String(parsedData.city || ''),
+        state: String(parsedData.state || ''),
+        shippingAddress: String(parsedData.shippingAddress || ''),
+        itemName: String(parsedData.itemName || ''),
+        hsnCode: String(parsedData.hsnCode || ''),
+        packing: String(parsedData.packing || ''),
+        quantity: String(parsedData.quantity || ''),
+        totalQuantity: String(parsedData.totalQuantity || ''),
+        taxPercent: String(parsedData.taxPercent || ''),
+        taxAmt: String(parsedData.taxAmt || ''),
+        rate: String(parsedData.rate || ''),
+        amount: String(parsedData.amount || ''),
+        netPayable: String(parsedData.netPayable || '')
+      };
+      
+      console.log('🔵 Sending cleaned inventory data:', inventoryData);
+      console.log('🔵 Final data type check:', typeof inventoryData);
+      
+      const result = await createInventory.mutateAsync(inventoryData);
       console.log('🟢 Inventory added successfully:', result);
     } catch (error) {
       console.error('🔴 Error in handleAddInventory:', {
@@ -216,7 +321,7 @@ export default function Dashboard() {
         message: error.message,
         code: error.code,
         stack: error.stack,
-        input: { warehouseId, ...data },
+        input: { warehouseId, data },
       });
     }
   };
@@ -285,6 +390,19 @@ export default function Dashboard() {
             <div className="flex justify-center items-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
             </div>
+          ) : queryError ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="text-center">
+                <div className="text-red-400 text-xl mb-2">⚠️ Error Loading Data</div>
+                <div className="text-gray-400 mb-4">{queryError.message}</div>
+                <button 
+                  onClick={() => window.location.reload()} 
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded transition-colors duration-200"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               {warehouses.length > 0 && <Charts warehouses={warehouses} />}
@@ -293,7 +411,7 @@ export default function Dashboard() {
                 {showWarehouseForm ? (
                   <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg p-4">
                     <h2 className="text-xl font-semibold mb-4">Add New Warehouse</h2>
-                    <WarehouseForm onSubmit={handleAddWarehouse} />
+                    <WarehouseForm onSubmit={handleAddWarehouse} onTestDirect={testDirectAPI} />
                     <button 
                       onClick={() => setShowWarehouseForm(false)} 
                       className="mt-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors duration-200"
@@ -311,17 +429,24 @@ export default function Dashboard() {
                 )}
               </div>
               <div className="grid grid-cols-1 gap-6">
-                {warehouses.map((warehouse) => (
-                  <WarehouseCard
-                    key={warehouse.id}
-                    warehouse={warehouse}
-                    onEdit={setEditingWarehouse}
-                    onDelete={handleDeleteWarehouse}
-                    onAddInventory={handleAddInventory}
-                    onEditInventory={handleEditInventory}
-                    onDeleteInventory={handleDeleteInventory}
-                  />
-                ))}
+                {warehouses && warehouses.length > 0 ? (
+                  warehouses.map((warehouse) => (
+                    <WarehouseCard
+                      key={warehouse.id}
+                      warehouse={warehouse}
+                      onEdit={setEditingWarehouse}
+                      onDelete={handleDeleteWarehouse}
+                      onAddInventory={handleAddInventory}
+                      onEditInventory={handleEditInventory}
+                      onDeleteInventory={handleDeleteInventory}
+                    />
+                  ))
+                ) : (
+                  <div className="text-center text-gray-400 py-8">
+                    <div className="text-xl mb-2">📦 No warehouses found</div>
+                    <div>Click "Add Warehouse" to get started</div>
+                  </div>
+                )}
               </div>
               {editingWarehouse && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">

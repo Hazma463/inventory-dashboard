@@ -18,25 +18,31 @@ export const inventoryRouter = createTRPCRouter({
   // Create new warehouse
   createWarehouse: publicProcedure
     .input(z.object({
-      name: z.string(),
-      location: z.string(),
+      name: z.string().min(1, "Name is required"),
+      location: z.string().min(1, "Location is required"),
     }))
-    .mutation(async ({ input }) => {
-      console.log('Creating warehouse with input:', input);
+    .mutation(async ({ input, ctx }) => {
+      // This should show in server terminal, not browser console
+      console.log('=== SERVER SIDE LOGS ===');
+      console.log('🔵 createWarehouse called on server');
+      console.log('🔵 Input received:', input);
+      console.log('🔵 Input type:', typeof input);
+      console.log('🔵 Input JSON:', JSON.stringify(input));
+      console.log('🔵 Request method:', ctx.req.method);
+      console.log('🔵 Request headers:', ctx.req.headers['content-type']);
+      console.log('========================');
+      
       try {
         const result = await prisma.warehouse.create({
-          data: { name: input.name, location: input.location },
+          data: { 
+            name: input.name, 
+            location: input.location 
+          },
         });
-        console.log('Successfully created warehouse:', result);
+        console.log('🟢 Server: Successfully created warehouse:', result);
         return result;
       } catch (error) {
-        console.error('Error creating warehouse:', error);
-        if (error instanceof Error) {
-          console.error('Error details:', {
-            message: error.message,
-            stack: error.stack,
-          });
-        }
+        console.error('🔴 Server error creating warehouse:', error);
         throw error;
       }
     }),
